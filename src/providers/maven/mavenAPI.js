@@ -54,8 +54,11 @@ export function mavenGetPackageVersions(packageName) {
     let [group, artifact] = packageName.split(':');
     let search = group.replace(/\./g, "/") + "/" + artifact
     let mergedResults = []
-    return Promise.all(repositories.map(element => {
-      const queryUrl = `${element}${search}/maven-metadata.xml`;
+    return Promise.all(repositories.map(repository => {
+      if (!repository.endsWith("/")) {
+        repository += "/"
+      }
+      const queryUrl = `${repository}${search}/maven-metadata.xml`;
       return httpRequest.xhr({ url: queryUrl })
         .then(response => {
           if (response.status != 200) {
