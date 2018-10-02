@@ -11,7 +11,7 @@ const MAVEN_CENTRAL = "https://repo.maven.apache.org/maven2/"
 
 function loadMavenRepositories() {
   const homeDir = os.homedir();
-  let result = []
+  let mergedResults = []
   return Promise.all([new Promise(function (resolve, reject) {
     let repositories = []
 
@@ -43,47 +43,46 @@ function loadMavenRepositories() {
     resolve(repositories)
   })]).then(results => {
     results.forEach(r => {
-      result = result.concat(r)
+      mergedResults = mergedResults.concat(r)
     })
-    return Promise.resolve(result)
+    return Promise.resolve(mergedResults)
   })
 }
 
 export function mavenGetPackageVersions(packageName) {
-  return new Promise(function (resolve, reject) {
-    loadMavenRepositories().then((repositories) => {
-      let [group, artifact] = packageName.split(':');
-      let search = group.replace(/\./g, "/") + "/" + artifact
-      let results = []
-      return Promise.all(repositories.map(element => {
-        const queryUrl = `${element}${search}/maven-metadata.xml`;
-        return httpRequest.xhr({ url: queryUrl })
-          .then(response => {
-            if (response.status != 200) {
-              reject({
-                status: response.status,
-                responseText: response.responseText
-              });
-              return;
-            }
+  return loadMavenRepositories().then((repositories) => {
+    let [group, artifact] = packageName.split(':');
+    let search = group.replace(/\./g, "/") + "/" + artifact
+    let mergedResults = []
+    return Promise.all(repositories.map(element => {
+      const queryUrl = `${element}${search}/maven-metadata.xml`;
+      return httpRequest.xhr({ url: queryUrl })
+        .then(response => {
+          if (response.status != 200) {
+            return Promise.reject({
+              status: response.status,
+              responseText: response.responseText
+            });
+          }
 
-            // Parse XML
-            let xmlRootNode = new xmldoc.XmlDocument(response.responseText);
-            let xmlVersioningNode = xmlRootNode.childNamed("versioning");
-            let xmlVersionsList = xmlVersioningNode.childNamed("versions").childrenNamed("version");
-            let versions = []
-            xmlVersionsList.forEach(xmlVersionNode => {
-              versions.push(xmlVersionNode.val);
-            })
-            resolve(versions);
-          }).catch(reject);
-      })).then(results => {
-        results.forEach(r => {
-          result = result.concat(r)
+          // Parse XML
+          let xmlRootNode = new xmldoc.XmlDocument(response.responseText);
+          let xmlVersioningNode = xmlRootNode.childNamed("versioning");
+          let xmlVersionsList = xmlVersioningNode.childNamed("versions").childrenNamed("version");
+          let versions = []
+          xmlVersionsList.forEach(xmlVersionNode => {
+            versions.push(xmlVersionNode.val);
+          })
+          return Promise.resolve(versions);
+        }).catch(function (err) {
+          return Promise.resolve([]);
         })
-        return Promise.resolve(result)
+    })).then(results => {
+      results.forEach(r => {
+        mergedResults = mergedResults.concat(r)
       })
-    });
+      return Promise.resolve(mergedResults)
+    })
   });
 
 }
